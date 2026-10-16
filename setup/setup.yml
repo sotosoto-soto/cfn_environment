@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EC2 SSH practice'
+ 
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+ 
+  SSHSourceCidr:
+    Type: String
+    Description: 'IPv4 address with /32'
+ 
+Resources:
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH on port 22222
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22222
+          ToPort: 22222
+          CidrIp: !Ref SSHSourceCidr
+ 
+  PracticeEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t2.micro
+      KeyName: cfn-practice-key
+ 
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: true
+          SubnetId: subnet-017a3d22e8baa7c51
+          GroupSet:
+            - !GetAtt SSHSecurityGroup.GroupId
+ 
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -e
+          echo 'Port 22222' > /etc/ssh/sshd_config.d/99-ssh-port.conf
+          /usr/sbin/sshd -t
+          systemctl restart sshd
+ 
+      Tags:
+        - Key: Name
+          Value: cfn-practice-ec2
+ 
+Outputs:
+  InstanceId:
+    Value: !Ref PracticeEC2
+ 
+  PublicIp:
+    Value: !GetAtt PracticeEC2.PublicIp
