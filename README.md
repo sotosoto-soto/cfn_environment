@@ -43,4 +43,5 @@ local PCからce2に接続しec2上のcfnからawsサービスを作成する。
 # ディレクトリ構成
 
 # 構成図
-- ![version 1](./docs/infrastructure.svg)# cfn_environment
+- ![version 1](./docs/infrastructure.svg)
+
