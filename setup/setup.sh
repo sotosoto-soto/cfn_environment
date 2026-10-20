@@ -81,6 +81,7 @@ elif [[ "$ACTION" == "up" ]]; then
     echo "    User ec2-user"
     echo "    Port 22222"
     echo "    IdentityFile ~/.ssh/$KEYNAME.pem"
+    echo "    ProxyCommand connect -H プロキシサーバ:ポート番号 %h %p"
     echo "-----"
 
 elif [[ "$ACTION" == "stop" ]]; then
