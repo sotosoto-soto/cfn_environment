@@ -109,3 +109,6 @@ Outputs:
 
   PublicIp:
     Value: !GetAtt PracticeEC2.PublicIp
+
+  PublicDnsName:
+    Value: !GetAtt PracticeEC2.PublicDnsName
