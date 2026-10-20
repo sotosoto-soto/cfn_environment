@@ -64,6 +64,19 @@ elif [[ "$ACTION" == "up" ]]; then
 
     echo "EC2 Public IP: $PUBLIC_IP"
     echo "EC2の作成が完了しました。"
+<<<<<<< Updated upstream
+=======
+    echo ""
+    echo "以下を ~/.ssh/config に追記してください。"
+    echo "-----"
+    echo "Host $KEYNAME"
+    echo "    HostName $PUBLIC_DNS"
+    echo "    User ec2-user"
+    echo "    Port 22222"
+    echo "    IdentityFile ~/.ssh/$KEYNAME.pem"
+    echo "    ProxyCommand connect -H プロキシサーバ:ポート番号 %h %p"
+    echo "-----"
+>>>>>>> Stashed changes
 
 elif [[ "$ACTION" == "stop" ]]; then
     echo "EC2の停止を行います。"
