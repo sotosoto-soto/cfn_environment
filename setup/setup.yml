@@ -1,14 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'EC2 SSH practice'
+Description: 'EC2 SSM Session Manager practice environment'
 
 Parameters:
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
-
-  SSHSourceCidr:
-    Type: String
-    Description: 'IPv4 address with /32'
 
   VPCCidr:
     Type: String
@@ -29,76 +25,105 @@ Resources:
         - Key: Name
           Value: cfn-practice-vpc
 
-  Igw:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: cfn-practice-igw
-
-  IgwAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref Igw
-
-  PublicSubnet1:
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref VpcSubnetCidr1
       AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: false
 
-  PublicRouteTable:
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: cfn-practice-public-rt
+          Value: cfn-practice-private-rt
 
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: IgwAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref Igw
-
-  PublicSubnet1RouteTableAssociation:
+  PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
 
-  SSHSecurityGroup:
+  Ec2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH on port 22222
+      GroupDescription: Security group for EC2 instance
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VPCCidr
+
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VPC endpoints
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 22222
-          ToPort: 22222
-          CidrIp: !Ref SSHSourceCidr
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VPCCidr
+  
+  SsmEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
 
+  SsmMessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  SSMSessionManagerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+  
+  PracticeEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SSMSessionManagerRole
+  
   PracticeEC2:
     Type: AWS::EC2::Instance
+    DependsOn:
+      - SsmEndpoint
+      - SsmMessagesEndpoint
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: t2.micro
-      KeyName: cfn-practice-key
-      SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref PracticeEC2InstanceProfile
+      SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds:
-        - !Ref SSHSecurityGroup
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          set -e
-          echo 'Port 22222' > /etc/ssh/sshd_config.d/99-ssh-port.conf
-          /usr/sbin/sshd -t
-          systemctl restart sshd
+        - !Ref Ec2SecurityGroup
       Tags:
         - Key: Name
           Value: cfn-practice-ec2
@@ -106,9 +131,3 @@ Resources:
 Outputs:
   InstanceId:
     Value: !Ref PracticeEC2
-
-  PublicIp:
-    Value: !GetAtt PracticeEC2.PublicIp
-
-  PublicDnsName:
-    Value: !GetAtt PracticeEC2.PublicDnsName
