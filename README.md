@@ -2,6 +2,7 @@
 cfnの練習のための環境構築が自動で行われるプロジェクト
 local PCからce2に接続しec2上のcfnからawsサービスを作成する。
 
+
 # 仕様
 - ymlを使用
 - ec2を作成
@@ -10,14 +11,9 @@ local PCからce2に接続しec2上のcfnからawsサービスを作成する。
 |policy|用途|
 |---|---|
 |AmazonEC2FullAccess|ec2上でlocalpcのようにすべての操作を行う|
-<<<<<<< Updated upstream
-|AWSCloudFormationFullAccess|CloudFormationをec2から操作する|
-|AmazonSSMReadOnlyAccess|ssmの読み込みを行う必要があるため|
-=======
 |AWSCloudFormationFullAccess|ec2からCloudFormationを操作する|
 |AmazonSSMReadOnlyAccess|AMIIDの読み取りを行う|
 |IAMFullAccess|EC2がSSMに登録され、通信するため|
->>>>>>> Stashed changes
 
 
 # 主な機能
