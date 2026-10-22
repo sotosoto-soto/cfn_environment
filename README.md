@@ -10,8 +10,14 @@ local PCからce2に接続しec2上のcfnからawsサービスを作成する。
 |policy|用途|
 |---|---|
 |AmazonEC2FullAccess|ec2上でlocalpcのようにすべての操作を行う|
+<<<<<<< Updated upstream
 |AWSCloudFormationFullAccess|CloudFormationをec2から操作する|
 |AmazonSSMReadOnlyAccess|ssmの読み込みを行う必要があるため|
+=======
+|AWSCloudFormationFullAccess|ec2からCloudFormationを操作する|
+|AmazonSSMReadOnlyAccess|AMIIDの読み取りを行う|
+|IAMFullAccess|EC2がSSMに登録され、通信するため|
+>>>>>>> Stashed changes
 
 
 # 主な機能
@@ -19,26 +25,32 @@ local PCからce2に接続しec2上のcfnからawsサービスを作成する。
 ## 使い方
 - ec2環境の作成
     ```
-    ./script.sh my-profile up
+    ./setup/setup.sh my-profile up
     ```
 - ec2環境の削除
     ```
-    ./script.sh my-profile down
+    ./setup/setup.sh my-profile down
     ```
 
 - ec2環境の停止
     ```
-    ./script.sh my-profile stop
+    ./setup/setup.sh my-profile stop
+    ```
+
+- ec2環境の起動
+    ```
+    ./setup/setup.sh my-profile start
     ```
 
 ## セットアップ手順
-1. sshkeyの作成
-    ```
-    ./script.sh my-profile create_sshkey
-    ```
 1. shfileに実行権限の付与
     ```
     chmod +x ./setup/setup.sh
+    ```
+
+1. sshkeyの作成
+    ```
+    ./setup/setup.sh my-profile create_sshkey
     ```
 # ディレクトリ構成
 
