@@ -5,16 +5,17 @@ export AWS_CLI_FILE_ENCODING=UTF-8
 
 if [[ "$#" -lt 2 ]]; then
     echo "エラー: 引数が足りません。"
-    echo "使い方: $0 [profile] [up|start|stop|down]"
+    echo "使い方: $0 [profile] [up|start|stop|down|create_sshkey]"
     exit 1
 fi
 
 PROFILE="$1"
 ACTION="$2"
 
-# region、stack_nameの初期値
+# region、stack_name、key_nameの初期値
 REGION="ap-northeast-1"
 STACKNAME="cfn-practice-stack"
+KEYNAME="cfn-practice-key"   # ← 任意のキーペア名に変更
 
 # スタックに含まれるEC2インスタンスIDを配列INSTANCE_IDSに格納する
 get_instance_ids() {
@@ -35,7 +36,7 @@ get_instance_ids() {
     read -r -a INSTANCE_IDS <<< "$ids_text"
 }
 
-# Session Managerでの接続コマンドを表示する
+# Session Managerでの接続コマンドと、VS Code Remote-SSH用の設定例を表示する
 show_connect_command() {
     echo ""
     echo "以下のコマンドでSession Manager経由で接続できます。"
@@ -43,6 +44,17 @@ show_connect_command() {
     echo "-----"
     for id in "${INSTANCE_IDS[@]}"; do
         echo "aws ssm start-session --target $id --region $REGION --profile $PROFILE"
+    done
+    echo "-----"
+    echo ""
+    echo "VS Code Remote-SSH用の ~/.ssh/config 設定例:"
+    echo "-----"
+    for id in "${INSTANCE_IDS[@]}"; do
+        echo "Host cfn-practice-ec2"
+        echo "    HostName $id"
+        echo "    User ec2-user"
+        echo "    IdentityFile ~/.ssh/$KEYNAME.pem"
+        echo "    ProxyCommand aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region $REGION --profile $PROFILE"
     done
     echo "-----"
 }
@@ -72,7 +84,8 @@ elif [[ "$ACTION" == "up" ]]; then
         --stack-name "$STACKNAME" \
         --region "$REGION" \
         --profile "$PROFILE" \
-        --capabilities CAPABILITY_IAM
+        --capabilities CAPABILITY_IAM \
+        --parameter-overrides KeyName="$KEYNAME"
 
     # インスタンスIDを取得
     get_instance_ids
@@ -124,7 +137,37 @@ elif [[ "$ACTION" == "stop" ]]; then
 
     echo "EC2インスタンスを停止しました。"
 
+elif [[ "$ACTION" == "create_sshkey" ]]; then
+    echo "SSH鍵の作成を行います。"
+
+    KEYFILE="$HOME/.ssh/$KEYNAME.pem"
+
+    if [[ -e "$KEYFILE" ]]; then
+        echo "エラー: $KEYFILE は既に存在します。"
+        exit 1
+    fi
+
+    mkdir -p "$HOME/.ssh"
+    chmod 700 "$HOME/.ssh"
+
+    if ! aws ec2 create-key-pair \
+        --key-name "$KEYNAME" \
+        --key-type rsa \
+        --region "$REGION" \
+        --profile "$PROFILE" \
+        --query 'KeyMaterial' \
+        --output text > "$KEYFILE"; then
+        rm -f "$KEYFILE"
+        echo "エラー: SSH鍵の作成に失敗しました。同名のキーペアが既にAWSにある可能性があります。"
+        exit 1
+    fi
+
+    chmod 400 "$KEYFILE"
+
+    echo "SSH鍵の作成が完了しました。"
+    echo "秘密鍵は $KEYFILE です。"
+
 else
-    echo "エラー: 第2引数は [up|start|stop|down] を指定してください。"
+    echo "エラー: 第2引数は [up|start|stop|down|create_sshkey] を指定してください。"
     exit 1
 fi
