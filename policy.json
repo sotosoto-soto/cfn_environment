@@ -1,0 +1,22 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": [
+        "arn:aws:ec2:ap-northeast-1:595260646003:instance/*",
+        "arn:aws:ssm:ap-northeast-1::document/AWS-StartSSHSession",
+        "arn:aws:ssm:ap-northeast-1::document/SSM-SessionManagerRunShell"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ssm:TerminateSession",
+        "ssm:ResumeSession"
+      ],
+      "Resource": "arn:aws:ssm:*:*:session/${aws:username}-*"
+    }
+  ]
+}
