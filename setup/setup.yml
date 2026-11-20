@@ -10,9 +10,25 @@ Parameters:
     Type: String
     Default: 10.0.0.0/16
 
-  VpcSubnetCidr1:
+  PrivateSubnetCidr1:
     Type: String
     Default: 10.0.1.0/24
+
+  PublicSubnetCidr1:
+    Type: String
+    Default: 10.0.2.0/24
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+
+  # VS Code Server が約650MB使うため、1GBのmicroでは不足する
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
 
 Resources:
   VPC:
@@ -25,11 +41,12 @@ Resources:
         - Key: Name
           Value: cfn-practice-vpc
 
+# --- private subnet and route table
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref VpcSubnetCidr1
+      CidrBlock: !Ref PrivateSubnetCidr1
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: false
 
@@ -41,12 +58,78 @@ Resources:
         - Key: Name
           Value: cfn-practice-private-rt
 
+  PrivateRoutetoNat:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable
 
+# --- public subnet and route table
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetCidr1
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: cfn-practice-igw
+
+  IgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: cfn-practice-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: IgwAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      Tags:
+        - Key: Name
+          Value: cfn-practice-natgw
+
+# --- security groups and endpoints
   Ec2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -56,7 +139,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: !Ref VPCCidr
+          CidrIp: 0.0.0.0/0
 
   EndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -68,7 +151,7 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: !Ref VPCCidr
-  
+
   SsmEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -93,6 +176,7 @@ Resources:
         - !Ref EndpointSecurityGroup
       PrivateDnsEnabled: true
 
+# --- EC2 instance and IAM role
   SSMSessionManagerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -105,25 +189,34 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-  
+
   PracticeEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
         - !Ref SSMSessionManagerRole
-  
+
   PracticeEC2:
     Type: AWS::EC2::Instance
     DependsOn:
       - SsmEndpoint
       - SsmMessagesEndpoint
+      - PrivateRoutetoNat
     Properties:
       ImageId: !Ref LatestAmiId
-      InstanceType: t2.micro
+      InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref PracticeEC2InstanceProfile
       SubnetId: !Ref PrivateSubnet1
+      KeyName: !Ref KeyName
       SecurityGroupIds:
         - !Ref Ec2SecurityGroup
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf install -y dnf-plugins-core
+          dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+          dnf install -y terraform
+          terraform -version > /var/log/terraform-version.log 2>&1
       Tags:
         - Key: Name
           Value: cfn-practice-ec2
