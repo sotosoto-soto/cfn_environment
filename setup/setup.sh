@@ -47,14 +47,28 @@ show_connect_command() {
     done
     echo "-----"
     echo ""
+    # プロキシは実行時の環境変数から取得する(リポジトリには書かない)
+    # VS CodeはGit Bashの環境変数を引き継がないため、設定例に直接埋め込む
+    local proxy="${HTTPS_PROXY:-${https_proxy:-}}"
+    local proxy_prefix=""
+    if [[ -n "$proxy" ]]; then
+        # Git Bash外から起動されるとPATHに/usr/binがないため、envはフルパスで指定する
+        proxy_prefix="/usr/bin/env HTTPS_PROXY=$proxy "
+    fi
+
     echo "VS Code Remote-SSH用の ~/.ssh/config 設定例:"
+    if [[ -n "$proxy" ]]; then
+        echo "※ 環境変数 HTTPS_PROXY の値をProxyCommandに含めています。"
+    else
+        echo "※ 環境変数 HTTPS_PROXY が未設定のため、プロキシなしの設定例です。"
+    fi
     echo "-----"
     for id in "${INSTANCE_IDS[@]}"; do
         echo "Host cfn-practice-ec2"
         echo "    HostName $id"
         echo "    User ec2-user"
         echo "    IdentityFile ~/.ssh/$KEYNAME.pem"
-        echo "    ProxyCommand aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region $REGION --profile $PROFILE"
+        echo "    ProxyCommand ${proxy_prefix}aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region $REGION --profile $PROFILE"
     done
     echo "-----"
 }
